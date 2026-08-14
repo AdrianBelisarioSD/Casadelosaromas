@@ -1,0 +1,814 @@
+{% extends 'gesym/base.html' %}
+{% load gesym_extras %}
+
+{% block titulo %}Compras{% endblock %}
+
+{% block contenido %}
+
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="mensaje-alerta mensaje-{{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+
+    <div class="cards-resumen">
+        <div class="card card-verde">
+            <div class="card-icono"><i class="fa-solid fa-dollar-sign"></i></div>
+            <div>
+                <p>Ventas totales</p>
+                <h2>${{ total_ventas|moneda }}</h2>
+            </div>
+        </div>
+        <div class="card card-azul">
+            <div class="card-icono"><i class="fa-solid fa-bag-shopping"></i></div>
+            <div>
+                <p>Ventas Realizadas</p>
+                <h2>{{ total_ventas_realizadas }}</h2>
+            </div>
+        </div>
+        <div class="card card-naranja">
+            <div class="card-icono"><i class="fa-solid fa-users"></i></div>
+            <div>
+                <p>Clientes</p>
+                <h2>{{ total_clientes }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="acciones-inventario">
+        <button class="btn-primario" onclick="abrirModalAgregarVenta()">Agregar venta</button>
+    </div>
+
+    <table class="tabla-inventario">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Cantidad</th>
+                <th>Unidades</th>
+                <th>Cliente</th>
+                <th>Dirección</th>
+                <th>Método de pago</th>
+                <th>Total $</th>
+                <th class="th-acciones">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for venta in ventas %}
+            <tr>
+                <td>{{ venta.fecha_venta|date:"d F Y" }}</td>
+                <td>{{ venta.total_productos }} Productos</td>
+                <td>{{ venta.total_unidades }} Unidades</td>
+                <td>{{ venta.cliente.nombre_completo }}</td>
+                <td><i class="fa-solid fa-location-dot"></i> {{ venta.cliente.direccion }}</td>
+                <td>{{ venta.get_metodo_pago_display }}</td>
+                <td>${{ venta.total_venta|moneda }}</td>
+                <td class="celda-acciones">
+                    <div class="acciones-grupo">
+                    <i class="fa-solid fa-pen editar-icono" onclick="abrirModalEditarVenta({{ venta.id }}, '{{ venta.cliente.nombre_completo|escapejs }}', '{{ venta.cliente.correo|escapejs }}', '{{ venta.cliente.telefono|escapejs }}', '{{ venta.cliente.direccion|escapejs }}', '{{ venta.fecha_venta|date:"Y-m-d" }}', '{{ venta.metodo_pago|escapejs }}', '{{ venta.notas|escapejs }}', '{{ venta.detalles_para_js|escapejs }}')"></i>
+                    <form method="POST" action="{% url 'eliminar_venta' venta.id %}" class="form-inline" onsubmit="return confirm('¿Eliminar esta venta?');">
+                        {% csrf_token %}
+                        <button type="submit" class="icono-boton"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                    <i class="fa-solid fa-circle-info detalle-icono"
+                        onclick="abrirModalDetalleVenta(
+                            {{ venta.id }},
+                            '{{ venta.cliente.nombre_completo|escapejs }}',
+                            '{{ venta.cliente.correo|escapejs }}',
+                            '{{ venta.cliente.telefono|escapejs }}',
+                            '{{ venta.cliente.direccion|escapejs }}',
+                            '{{ venta.fecha_venta|date:"d \\d\\e F \\d\\e Y" }}',
+                            '{{ venta.metodo_pago|escapejs }}',
+                            '{{ venta.notas|escapejs }}',
+                            '{{ venta.detalles_para_js|escapejs }}',
+                            {{ venta.total_venta }}
+                        )"></i>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8">No hay ventas registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="paginacion">
+        {% if ventas.has_previous %}
+            <a href="?page={{ ventas.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% for numero in ventas.paginator.page_range %}
+            {% if numero == ventas.number %}
+                <a href="?page={{ numero }}" class="active">{{ numero }}</a>
+            {% else %}
+                <a href="?page={{ numero }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">{{ numero }}</a>
+            {% endif %}
+        {% endfor %}
+        {% if ventas.has_next %}
+            <a href="?page={{ ventas.next_page_number }}">Siguiente</a>
+        {% endif %}
+    </div>
+
+    {{ productos_json|json_script:"productos-data" }}
+    {{ clientes_json|json_script:"clientes-data" }}
+
+    <!-- MODAL: AGREGAR VENTA -->
+    <div class="modal-overlay" id="modal-agregar-venta">
+        <div class="modal-caja modal-caja-grande">
+            <h2>Registrar Venta</h2>
+            <form method="POST" action="{% url 'agregar_venta' %}" id="form-agregar-venta">
+                {% csrf_token %}
+                <input type="hidden" name="productos_json" id="input-productos-json">
+                <input type="hidden" name="metodo_pago" id="input-metodo-pago" value="Efectivo">
+
+                <div class="buscar-producto-row">
+
+                    <div class="campo campo-buscar-producto">
+                        <label>Agregar Productos</label>
+                        <div class="autocomplete-wrapper">
+                            <i class="fa-solid fa-magnifying-glass autocomplete-lupa"></i>
+                            <input type="text" id="input-buscar-producto" placeholder="Buscar producto por nombre o código..." autocomplete="off">
+                            <i class="fa-solid fa-chevron-down autocomplete-flecha"></i>
+                            <div class="autocomplete-dropdown" id="dropdown-buscar-producto"></div>
+                        </div>
+                    </div>
+
+                    <div class="campo campo-cantidad" id="campo-tipo-venta-agregar" style="display:none;">
+                        <label>Vender por</label>
+                        <select id="input-tipo-venta-producto" onchange="actualizarLabelCantidad('agregar')">
+                            <option value="unidad">Unidad</option>
+                            <option value="caja">Caja</option>
+                        </select>
+                    </div>
+                    <div class="campo campo-cantidad">
+                        <label id="label-cantidad-producto">Cantidad</label>
+                        <input type="number" id="input-cantidad-producto" min="1" value="1">
+                    </div>
+                    <button type="button" class="btn-agregar-carrito" onclick="agregarProductoCarrito('agregar')">+</button>
+                </div>
+
+                <div class="carrito-caja">
+                    <p class="carrito-titulo">Productos Agregados</p>
+                    <div id="lista-carrito">
+                        <p class="carrito-vacio">Aún no has agregado productos.</p>
+                    </div>
+                    <div class="carrito-total">
+                        <span>Total de la compra</span>
+                        <span id="total-carrito">$ 0</span>
+                    </div>
+                </div>
+
+                <div class="campo campo-buscar-producto">
+                    <label>Buscar cliente existente (opcional)</label>
+                    <div class="autocomplete-wrapper">
+                        <i class="fa-solid fa-magnifying-glass autocomplete-lupa"></i>
+                        <input type="text" id="input-buscar-cliente" placeholder="Escribe el nombre del cliente..." autocomplete="off">
+                        <i class="fa-solid fa-chevron-down autocomplete-flecha"></i>
+                        <div class="autocomplete-dropdown" id="dropdown-buscar-cliente"></div>
+                    </div>
+                </div>
+
+
+
+
+                <h3 class="subtitulo-modal">Información del cliente</h3>
+                <div class="modal-fila"> 
+                    <div class="campo">
+                        <label>Nombre completo</label>
+                        <input type="text" name="nombre_completo" required>
+                    </div>
+                    <div class="campo">
+                        <label>Teléfono</label>
+                        <input type="text" name="telefono" inputmode="numeric" pattern="[0-9]*" maxlength="15" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                    </div>
+                </div>
+                <div class="modal-fila">
+                    <div class="campo">
+                        <label>Correo electrónico</label>
+                        <input type="email" name="correo">
+                    </div>
+                    <div class="campo">
+                        <label>Fecha de Venta</label>
+                        <input type="date" name="fecha_venta" id="input-fecha-venta-agregar" readonly required>
+                    </div>
+                </div>
+                <div class="campo">
+                    <label>Dirección</label>
+                    <input type="text" name="direccion">
+                </div>
+
+                <h3 class="subtitulo-modal">Métodos de Pago</h3>
+                <div class="metodos-pago" id="metodos-pago-agregar">
+                    <button type="button" class="btn-metodo activo" onclick="seleccionarMetodoPago('agregar','Efectivo', this)">Efectivo</button>
+                    <button type="button" class="btn-metodo" onclick="seleccionarMetodoPago('agregar','Tarjeta', this)">Tarjeta</button>
+                    <button type="button" class="btn-metodo" onclick="seleccionarMetodoPago('agregar','Transferencia', this)">Transferencia</button>
+                </div>
+
+                <label>Notas (Opcional)</label>
+                <textarea name="notas" placeholder="Ej: Entrega Urgente"></textarea>
+
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="cerrarModalAgregarVenta()">Cancelar</button>
+                    <button type="button" class="btn-registrar" onclick="registrarVenta()">Registrar Venta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR VENTA -->
+
+    <div class="modal-overlay" id="modal-editar-venta">
+        <div class="modal-caja modal-caja-grande">
+            <h2>Editar Venta</h2>
+            <form method="POST" id="form-editar-venta" action="">
+                {% csrf_token %}
+                <input type="hidden" name="productos_json" id="input-productos-json-editar">
+                <input type="hidden" name="metodo_pago" id="input-metodo-pago-editar" value="Efectivo">
+
+                <div class="buscar-producto-row">
+                    <div class="campo campo-buscar-producto">
+                        <label>Agregar Productos</label>
+                        <div class="autocomplete-wrapper">
+                            <i class="fa-solid fa-magnifying-glass autocomplete-lupa"></i>
+                            <input type="text" id="input-buscar-producto-editar" placeholder="Buscar producto por nombre o código..." autocomplete="off">
+                            <i class="fa-solid fa-chevron-down autocomplete-flecha"></i>
+                            <div class="autocomplete-dropdown" id="dropdown-buscar-producto-editar"></div>
+                        </div>
+                    </div>
+                    <div class="campo campo-cantidad" id="campo-tipo-venta-editar" style="display:none;">
+                        <label>Vender por</label>
+                        <select id="input-tipo-venta-producto-editar" onchange="actualizarLabelCantidad('editar')">
+                            <option value="unidad">Unidad</option>
+                            <option value="caja">Caja</option>
+                        </select>
+                    </div>
+                    <div class="campo campo-cantidad">
+                        <label id="label-cantidad-producto-editar">Cantidad</label>
+                        <input type="number" id="input-cantidad-producto-editar" min="1" value="1">
+                    </div>
+                    <button type="button" class="btn-agregar-carrito" onclick="agregarProductoCarrito('editar')">+</button>
+                </div>
+
+                <div class="carrito-caja">
+                    <p class="carrito-titulo">Productos Vendidos</p>
+                    <div id="lista-carrito-editar"></div>
+                    <div class="carrito-total">
+                        <span>Total de la venta</span>
+                        <span id="total-carrito-editar">$ 0</span>
+                    </div>
+                </div>  
+
+                <div class="campo campo-buscar-producto">
+                    <label>Buscar cliente existente (opcional)</label>
+                    <div class="autocomplete-wrapper">
+                        <i class="fa-solid fa-magnifying-glass autocomplete-lupa"></i>
+                        <input type="text" id="input-buscar-cliente" placeholder="Escribe el nombre del cliente..." autocomplete="off">
+                        <i class="fa-solid fa-chevron-down autocomplete-flecha"></i>
+                        <div class="autocomplete-dropdown" id="dropdown-buscar-cliente"></div>
+                    </div>
+                </div>
+
+                <h3 class="subtitulo-modal">Información del cliente</h3>
+                <div class="modal-fila">
+                    <div class="campo">
+                        <label>Nombre completo</label>
+                        <input type="text" name="nombre_completo" id="edit-venta-nombre" required>
+                    </div>
+                    <div class="campo">
+                        <label>Teléfono</label>
+                        <input type="text" name="telefono" id="edit-venta-telefono" inputmode="numeric" pattern="[0-9]*" maxlength="15" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                    </div>
+                </div>
+                <div class="modal-fila">
+                    <div class="campo">
+                        <label>Correo electrónico</label>
+                        <input type="email" name="correo" id="edit-venta-correo">
+                    </div>
+                    <div class="campo">
+                        <label>Fecha de Venta</label>
+                        <input type="date" name="fecha_venta" id="edit-venta-fecha" required>
+                    </div>
+                </div>
+                <div class="campo">
+                    <label>Dirección</label>
+                    <input type="text" name="direccion" id="edit-venta-direccion">
+                </div>
+
+                <h3 class="subtitulo-modal">Métodos de Pago</h3>
+                <div class="metodos-pago" id="metodos-pago-editar">
+                    <button type="button" class="btn-metodo" onclick="seleccionarMetodoPago('editar','Efectivo', this)">Efectivo</button>
+                    <button type="button" class="btn-metodo" onclick="seleccionarMetodoPago('editar','Tarjeta', this)">Tarjeta</button>
+                    <button type="button" class="btn-metodo" onclick="seleccionarMetodoPago('editar','Transferencia', this)">Transferencia</button>
+                </div>
+
+                <label>Notas (Opcional)</label>
+                <textarea name="notas" id="edit-venta-notas"></textarea>
+
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="cerrarModalEditarVenta()">Cancelar</button>
+                    <button type="button" class="btn-registrar" onclick="guardarCambiosVenta()">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: DETALLE VENTA (solo lectura) -->
+    <div class="modal-overlay" id="modal-detalle-venta">
+        <div class="modal-caja modal-caja-grande">
+            <div class="detalle-header">
+                <h2>Detalles de Venta</h2>
+                <button type="button" class="btn-cancelar" onclick="cerrarModalDetalleVenta()">Cerrar</button>
+            </div>
+
+            <div class="venta-badges">
+                <div class="badge badge-azul"><i class="fa-solid fa-calendar"></i> <span id="detalle-fecha"></span></div>
+                <div class="badge badge-verde"><i class="fa-solid fa-credit-card"></i> <span id="detalle-metodo"></span></div>
+            </div>
+
+            <h3 class="subtitulo-modal">Información del cliente</h3>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Nombre completo</label>
+                    <input type="text" id="detalle-nombre" disabled>
+                </div>
+                <div class="campo">
+                <label>Teléfono</label>
+                    <input type="text" id="detalle-telefono" disabled>
+                </div>
+            </div>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Correo electrónico</label>
+                    <input type="text" id="detalle-correo" disabled>
+                </div>
+                <div class="campo">
+                    <label>Dirección</label>
+                    <input type="text" id="detalle-direccion" disabled>
+                </div>
+            </div>
+
+            <div class="carrito-caja">
+                <p class="carrito-titulo">Productos Vendidos</p>
+                <div id="lista-carrito-detalle"></div>
+                <div class="carrito-total">
+                    <span>Total de la venta</span>
+                    <span id="total-carrito-detalle">$ 0</span>
+                </div>
+            </div>
+
+            <label>Notas de Venta</label>
+            <textarea id="detalle-notas" disabled></textarea>
+        </div>
+    </div>
+
+    <script>
+        const clientesData = JSON.parse(document.getElementById('clientes-data').textContent);
+        const productosData = JSON.parse(document.getElementById('productos-data').textContent);
+        let carritoAgregar = [];
+        let carritoEditar = [];
+
+        function initAutocomplete(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            let indiceActivo = -1;
+            let resultadosActuales = [];
+
+            function resaltar(texto, query) {
+                if (!query) return texto;
+                const regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+                return texto.replace(regex, '<mark>$1</mark>');
+            }
+
+            function claseStock(cantidad) {
+                if (cantidad <= 0) return 'stock-agotado';
+                if (cantidad <= 5) return 'stock-bajo';
+                return 'stock-normal';
+            }
+
+            function renderDropdown(query) {
+                const texto = query.trim().toLowerCase();
+                resultadosActuales = texto === ''
+                    ? productosData
+                    : productosData.filter(p =>
+                        p.nombre.toLowerCase().includes(texto) ||
+                        p.codigo.toLowerCase().includes(texto)
+                    );
+                indiceActivo = -1;
+
+                if (resultadosActuales.length === 0) {
+                    dropdown.innerHTML = `
+                        <div class="autocomplete-vacio">
+                            <i class="fa-solid fa-box-open"></i>
+                            <span>No se encontraron productos</span>
+                        </div>`;
+                } else {
+                    dropdown.innerHTML = resultadosActuales.map((p, i) => {
+                        const esBandeja = p.tipo_ingreso === 'bandeja';
+                        const tipoTexto = esBandeja
+                            ? `Bandeja (${p.unidades_por_bandeja || '?'} unidades)`
+                            : 'Unidad';
+                        const tipoClase = esBandeja ? 'autocomplete-tipo-bandeja' : 'autocomplete-tipo-unidad';
+                        const tieneCaja = p.precio_caja && p.unidades_por_caja;
+                        const cajaTexto = tieneCaja
+                            ? ` <span class="autocomplete-item-tipo autocomplete-tipo-caja">También por caja (${p.unidades_por_caja} und - $${Number(p.precio_caja).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>`
+                            : '';
+                        return `
+                        <div class="autocomplete-item" data-index="${i}" data-id="${p.id}" data-texto="${p.nombre} (${p.codigo})">
+                            <div class="autocomplete-item-icono"><i class="fa-solid fa-box"></i></div>
+                            <div class="autocomplete-item-textos">
+                                <span class="autocomplete-item-nombre">${resaltar(p.nombre, query)}</span>
+                                <span class="autocomplete-item-codigo">${resaltar(p.codigo, query)}</span>
+                                <span class="autocomplete-item-tipo ${tipoClase}">${tipoTexto}</span>${cajaTexto}
+                            </div>
+                            <div class="autocomplete-item-derecha">
+                                <span class="autocomplete-item-precio">$${Number(p.precio).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span class="autocomplete-stock-badge ${claseStock(p.cantidad)}">${p.cantidad} disponibles</span>
+                            </div>
+                        </div>
+                    `;
+                    }).join('');
+                }
+                dropdown.classList.add('abierto');
+            }
+
+            function marcarActivo() {
+                dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+                    el.classList.toggle('activo', i === indiceActivo);
+                });
+                const activo = dropdown.querySelector('.autocomplete-item.activo');
+                if (activo) activo.scrollIntoView({ block: 'nearest' });
+            }
+
+            function seleccionarItem(item) {
+                input.value = item.dataset.texto;
+                input.dataset.productoId = item.dataset.id;
+                dropdown.classList.remove('abierto');
+
+                const tipoModal = inputId.indexOf('editar') !== -1 ? 'editar' : 'agregar';
+                const productoSeleccionado = productosData.find(p => p.id === parseInt(item.dataset.id));
+                actualizarSelectorTipoVenta(tipoModal, productoSeleccionado);
+            }
+
+            input.addEventListener('focus', function () {
+                renderDropdown(input.value);
+            });
+
+            input.addEventListener('input', function () {
+                input.dataset.productoId = '';
+                renderDropdown(input.value);
+            });
+
+            input.addEventListener('keydown', function (e) {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                if (!dropdown.classList.contains('abierto') || items.length === 0) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    indiceActivo = Math.min(indiceActivo + 1, items.length - 1);
+                    marcarActivo();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    indiceActivo = Math.max(indiceActivo - 1, 0);
+                    marcarActivo();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (indiceActivo >= 0 && items[indiceActivo]) {
+                        seleccionarItem(items[indiceActivo]);
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('abierto');
+                }
+            });
+
+            dropdown.addEventListener('click', function (e) {
+                const item = e.target.closest('.autocomplete-item');
+                if (!item) return;
+                seleccionarItem(item);
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('abierto');
+                }
+            });
+        }
+
+        initAutocomplete('input-buscar-producto', 'dropdown-buscar-producto');
+        initAutocomplete('input-buscar-producto-editar', 'dropdown-buscar-producto-editar');
+
+        function initAutocompleteCliente(inputId, dropdownId, tipo) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    let indiceActivo = -1;
+
+    function resaltar(texto, query) {
+        if (!query || !texto) return texto || '';
+        const regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+        return texto.replace(regex, '<mark>$1</mark>');
+    }
+
+    function renderDropdown(query) {
+        const texto = query.trim().toLowerCase();
+        const resultados = texto === ''
+            ? clientesData
+            : clientesData.filter(c => c.nombre_completo.toLowerCase().includes(texto));
+        indiceActivo = -1;
+
+        if (resultados.length === 0) {
+            dropdown.innerHTML = `
+                <div class="autocomplete-vacio">
+                    <i class="fa-solid fa-user-slash"></i>
+                    <span>No se encontraron clientes</span>
+                </div>`;
+        } else {
+            dropdown.innerHTML = resultados.map((c, i) => `
+                <div class="autocomplete-item" data-index="${i}" data-id="${c.id}">
+                    <div class="autocomplete-item-icono"><i class="fa-solid fa-user"></i></div>
+                    <div class="autocomplete-item-textos">
+                        <span class="autocomplete-item-nombre">${resaltar(c.nombre_completo, query)}</span>
+                        <span class="autocomplete-item-codigo">${c.telefono || ''}</span>
+                    </div>
+                </div>
+            `).join('');
+        }   
+        dropdown.classList.add('abierto');
+    }
+
+    function seleccionarItem(item) {
+        const cliente = clientesData.find(c => c.id === parseInt(item.dataset.id));
+        if (!cliente) return;
+
+        input.value = cliente.nombre_completo;
+        dropdown.classList.remove('abierto');
+
+        const prefijo = tipo === 'agregar' ? '' : 'edit-venta-';
+        const sufijo = tipo === 'agregar' ? '' : '';                                
+
+        if (tipo === 'agregar') {
+            document.querySelector('#modal-agregar-venta input[name="nombre_completo"]').value = cliente.nombre_completo || ''; 
+            document.querySelector('#modal-agregar-venta input[name="correo"]').value = cliente.correo || '';
+            document.querySelector('#modal-agregar-venta input[name="telefono"]').value = cliente.telefono || '';                                                                                                                                                                                                                                                                                                                                   
+            document.querySelector('#modal-agregar-venta input[name="direccion"]').value = cliente.direccion || '';
+        } else {
+            document.getElementById('edit-venta-nombre').value = cliente.nombre_completo || '';
+            document.getElementById('edit-venta-correo').value = cliente.correo || '';
+            document.getElementById('edit-venta-telefono').value = cliente.telefono || '';
+            document.getElementById('edit-venta-direccion').value = cliente.direccion || '';
+        }
+    }
+
+    input.addEventListener('focus', function () {
+        renderDropdown(input.value);
+    });
+
+    input.addEventListener('input', function () {
+        renderDropdown(input.value);
+    });
+
+    dropdown.addEventListener('click', function (e) {
+        const item = e.target.closest('.autocomplete-item');
+        if (!item) return;
+        seleccionarItem(item);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('abierto');
+        }
+    });
+}
+
+initAutocompleteCliente('input-buscar-cliente', 'dropdown-buscar-cliente', 'agregar');
+initAutocompleteCliente('input-buscar-cliente-editar', 'dropdown-buscar-cliente-editar', 'editar');
+
+        function actualizarLabelCantidad(tipo) {
+            const selectId = tipo === 'agregar' ? 'input-tipo-venta-producto' : 'input-tipo-venta-producto-editar';
+            const labelId = tipo === 'agregar' ? 'label-cantidad-producto' : 'label-cantidad-producto-editar';
+            const selectEl = document.getElementById(selectId);
+            const labelEl = document.getElementById(labelId);
+            if (!selectEl || !labelEl) return;
+            labelEl.textContent = selectEl.value === 'caja' ? 'Cantidad (cajas)' : 'Cantidad (unidades)';
+        }
+
+        function actualizarSelectorTipoVenta(tipo, producto) {
+            const campoId = tipo === 'agregar' ? 'campo-tipo-venta-agregar' : 'campo-tipo-venta-editar';
+            const selectId = tipo === 'agregar' ? 'input-tipo-venta-producto' : 'input-tipo-venta-producto-editar';
+            const campoEl = document.getElementById(campoId);
+            const selectEl = document.getElementById(selectId);
+            const vendePorCaja = producto && producto.precio_caja && producto.unidades_por_caja;
+
+            if (vendePorCaja) {
+                campoEl.style.display = '';
+                selectEl.querySelector('option[value="caja"]').textContent =
+                    `Caja (${producto.unidades_por_caja} und - $${Number(producto.precio_caja).toLocaleString('es-CO', { minimumFractionDigits: 2 })})`;
+            } else {
+                campoEl.style.display = 'none';
+                selectEl.value = 'unidad';
+            }
+            actualizarLabelCantidad(tipo);
+        }
+
+        function agregarProductoCarrito(tipo) {
+            const inputId = tipo === 'agregar' ? 'input-buscar-producto' : 'input-buscar-producto-editar';
+            const cantidadId = tipo === 'agregar' ? 'input-cantidad-producto' : 'input-cantidad-producto-editar';
+            const tipoVentaId = tipo === 'agregar' ? 'input-tipo-venta-producto' : 'input-tipo-venta-producto-editar';
+            const inputEl = document.getElementById(inputId);
+            const cantidadIngresada = parseInt(document.getElementById(cantidadId).value) || 1;
+            const tipoVenta = document.getElementById(tipoVentaId).value;
+
+            const productoId = parseInt(inputEl.dataset.productoId);
+            const producto = productosData.find(p => p.id === productoId);
+            if (!producto) {
+                alert('Selecciona un producto de la lista desplegable.');
+                return;
+            }
+
+            // Si se vende "por caja", la cantidad ingresada es el número de cajas.
+            // Se convierte a unidades reales (para descontar del stock) y el precio
+            // efectivo por unidad se calcula a partir del precio de la caja, para
+            // que el subtotal refleje el descuento (ej: 1 caja de 25 = $19.000, no $25.000).
+            const esCaja = tipoVenta === 'caja' && producto.precio_caja && producto.unidades_por_caja;
+            const unidadesPorCaja = esCaja ? parseInt(producto.unidades_por_caja) : 1;
+            const cantidadUnidades = cantidadIngresada * unidadesPorCaja;
+            const precioEfectivo = esCaja
+                ? (parseFloat(producto.precio_caja) / unidadesPorCaja)
+                : parseFloat(producto.precio);
+
+            const carrito = tipo === 'agregar' ? carritoAgregar : carritoEditar;
+            const existente = carrito.find(item => item.id === producto.id && item.precio === precioEfectivo);
+            const cantidadYaEnCarrito = carrito.filter(item => item.id === producto.id).reduce((acc, i) => acc + i.cantidad, 0);
+
+            if (cantidadYaEnCarrito + cantidadUnidades > producto.cantidad) {
+                alert(`Solo hay ${producto.cantidad} unidades disponibles de "${producto.nombre}".`);
+                return;
+            }
+
+            if (existente) {
+                existente.cantidad += cantidadUnidades;
+                if (esCaja) existente.cajas = (existente.cajas || 0) + cantidadIngresada;
+            } else {
+                carrito.push({
+                    id: producto.id,
+                    nombre: producto.nombre,
+                    codigo: producto.codigo,
+                    precio: precioEfectivo,
+                    cantidad: cantidadUnidades,
+                    modo: esCaja ? 'caja' : 'unidad',
+                    cajas: esCaja ? cantidadIngresada : 0,
+                    unidadesPorCaja: unidadesPorCaja,
+                });
+            }
+
+            document.getElementById(inputId).value = '';
+            inputEl.dataset.productoId = '';
+            document.getElementById(cantidadId).value = 1;
+            renderCarrito(tipo);
+        }
+
+        function renderCarrito(tipo) {
+            const carrito = tipo === 'agregar' ? carritoAgregar : carritoEditar;
+            const contenedorId = tipo === 'agregar' ? 'lista-carrito' : 'lista-carrito-editar';
+            const totalId = tipo === 'agregar' ? 'total-carrito' : 'total-carrito-editar';
+            const contenedor = document.getElementById(contenedorId);
+
+            if (carrito.length === 0) {
+                contenedor.innerHTML = '<p class="carrito-vacio">Aún no has agregado productos.</p>';
+            } else {
+                contenedor.innerHTML = carrito.map((item, index) => {
+                    const detalleCantidad = item.modo === 'caja'
+                        ? `${item.cajas} caja${item.cajas === 1 ? '' : 's'} (${item.cantidad} und en total)`
+                        : `${item.cantidad} UND`;
+                    return `
+                    <div class="carrito-item">
+                        <div class="carrito-item-info">
+                            <strong>${item.nombre}</strong>
+                            <p>${item.codigo} - ${detalleCantidad}</p>
+                        </div>
+                        <input type="number" min="1" value="${item.cantidad}" onchange="actualizarCantidad('${tipo}', ${index}, this.value)">
+                        <span>$ ${(item.precio * item.cantidad).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <i class="fa-solid fa-trash carrito-eliminar" onclick="eliminarDelCarrito('${tipo}', ${index})"></i>
+                    </div>
+                `;
+                }).join('');
+            }
+
+            const total = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+            document.getElementById(totalId).textContent = '$ ' + total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function actualizarCantidad(tipo, index, valor) {
+            const carrito = tipo === 'agregar' ? carritoAgregar : carritoEditar;
+            const item = carrito[index];
+            item.cantidad = parseInt(valor) || 1;
+            if (item.modo === 'caja' && item.unidadesPorCaja) {
+                item.cajas = Math.round(item.cantidad / item.unidadesPorCaja);
+            }
+            renderCarrito(tipo);
+        }
+
+        function eliminarDelCarrito(tipo, index) {
+            const carrito = tipo === 'agregar' ? carritoAgregar : carritoEditar;
+            carrito.splice(index, 1);
+            renderCarrito(tipo);
+        }
+
+        function seleccionarMetodoPago(tipo, metodo, boton) {
+            const grupoId = tipo === 'agregar' ? 'metodos-pago-agregar' : 'metodos-pago-editar';
+            document.querySelectorAll('#' + grupoId + ' .btn-metodo').forEach(b => b.classList.remove('activo'));
+            boton.classList.add('activo');
+            const inputId = tipo === 'agregar' ? 'input-metodo-pago' : 'input-metodo-pago-editar';
+            document.getElementById(inputId).value = metodo;
+        }
+
+        function registrarVenta() {
+            if (carritoAgregar.length === 0) {
+                alert('Agrega al menos un producto a la venta.');
+                return;
+            }
+            const form = document.getElementById('form-agregar-venta');
+            document.getElementById('input-productos-json').value = JSON.stringify(carritoAgregar);
+
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            form.submit();
+        }
+
+        function guardarCambiosVenta() {
+            if (carritoEditar.length === 0) {
+                alert('La venta debe tener al menos un producto.');
+                return;
+            }
+            document.getElementById('input-productos-json-editar').value = JSON.stringify(carritoEditar);
+            document.getElementById('form-editar-venta').submit();
+        }
+
+        function abrirModalAgregarVenta() {
+                carritoAgregar = [];
+                renderCarrito('agregar');
+
+                const hoy = new Date();
+                const yyyy = hoy.getFullYear();
+                const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+                const dd = String(hoy.getDate()).padStart(2, '0');
+                document.getElementById('input-fecha-venta-agregar').value = `${yyyy}-${mm}-${dd}`;
+
+                document.getElementById('modal-agregar-venta').classList.add('abierto');
+            }
+        function cerrarModalAgregarVenta() {
+            document.getElementById('modal-agregar-venta').classList.remove('abierto');
+        }       
+
+        function abrirModalEditarVenta(id, nombre, correo, telefono, direccion, fecha, metodo, notas, detallesJson) {
+            document.getElementById('edit-venta-nombre').value = nombre;
+            document.getElementById('edit-venta-correo').value = correo;
+            document.getElementById('edit-venta-telefono').value = telefono;
+            document.getElementById('edit-venta-direccion').value = direccion;
+            document.getElementById('edit-venta-fecha').value = fecha;
+            document.getElementById('edit-venta-notas').value = notas;
+            document.getElementById('input-metodo-pago-editar').value = metodo;
+
+            document.querySelectorAll('#metodos-pago-editar .btn-metodo').forEach(b => {
+                b.classList.toggle('activo', b.textContent.trim() === metodo);
+            });
+
+            carritoEditar = JSON.parse(detallesJson);
+            renderCarrito('editar');
+
+            document.getElementById('form-editar-venta').action = '/compras/editar/' + id + '/';
+            document.getElementById('modal-editar-venta').classList.add('abierto');
+        }
+        function cerrarModalEditarVenta() {
+            document.getElementById('modal-editar-venta').classList.remove('abierto');
+        }
+
+        function abrirModalDetalleVenta(id, nombre, correo, telefono, direccion, fecha, metodo, notas, detallesJson, total) {
+            document.getElementById('detalle-nombre').value = nombre;
+            document.getElementById('detalle-correo').value = correo;
+            document.getElementById('detalle-telefono').value = telefono;
+            document.getElementById('detalle-direccion').value = direccion;
+            document.getElementById('detalle-fecha').textContent = fecha;
+            document.getElementById('detalle-metodo').textContent = metodo;
+            document.getElementById('detalle-notas').value = notas;
+
+            const detalles = JSON.parse(detallesJson);
+            const contenedor = document.getElementById('lista-carrito-detalle');
+            contenedor.innerHTML = detalles.map(item => `
+                <div class="carrito-item carrito-item-solo-lectura">
+                    <div class="carrito-item-info">
+                        <strong>${item.nombre}</strong>
+                        <p>${item.codigo} - Cantidad: ${item.cantidad} - Precio Unitario: $${item.precio.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <span>$ ${(item.precio * item.cantidad).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('total-carrito-detalle').textContent = '$ ' + Number(total).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('modal-detalle-venta').classList.add('abierto');
+        }
+        function cerrarModalDetalleVenta() {
+            document.getElementById('modal-detalle-venta').classList.remove('abierto');
+        }
+    </script>
+
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends 'gesym/base.html' %}
+
+{% block titulo %}Bodegas{% endblock %}
+
+{% block contenido %}
+    <h2 class="panel-titulo">Bodegas</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="mensaje-alerta mensaje-success">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+
+    <div class="acciones-inventario">
+        <button class="btn-primario" onclick="document.getElementById('modal-agregar-bodega').classList.add('abierto')">
+            Agregar bodega
+        </button>
+    </div>
+
+    <table class="tabla-inventario">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Ubicación</th>
+                <th>Encargado</th>
+                <th>Estado</th>
+                <th>Productos</th>
+                <th class="th-acciones">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bodega in bodegas %}
+            <tr>
+                <td>{{ bodega.nombre }}</td>
+                <td>{{ bodega.ubicacion|default:"—" }}</td>
+                <td>{{ bodega.encargado|default:"—" }}</td>
+                <td>
+                    {% if bodega.activa %}
+                        <span class="estado-badge estado-activo">Activa</span>
+                    {% else %}
+                        <span class="estado-badge estado-inactivo">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td>{{ bodega.productos.count }}</td>
+                <td class="celda-acciones">
+                    <div class="acciones-grupo">
+                        <i class="fa-solid fa-pen editar-icono"
+                            onclick="abrirModalEditarBodega('{{ bodega.id }}', '{{ bodega.nombre|escapejs }}', '{{ bodega.ubicacion|escapejs }}', '{{ bodega.encargado|escapejs }}', '{% if bodega.activa %}Activa{% else %}Inactiva{% endif %}')"></i>
+                        <form method="POST" action="{% url 'eliminar_bodega' bodega.id %}" class="form-inline" onsubmit="return confirm('¿Eliminar esta bodega?');">
+                            {% csrf_token %}
+                            <button type="submit" class="icono-boton"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                        {% if es_dueno %}
+                            <button type="button" class="icono-boton" title="Reiniciar inventario"
+                                onclick="abrirModalReiniciarBodega('{{ bodega.id }}', '{{ bodega.nombre|escapejs }}')">
+                                <i class="fa-solid fa-arrow-rotate-left reiniciar-icono"></i>
+                            </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">No hay bodegas registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- MODAL: AGREGAR BODEGA -->
+    <div class="modal-overlay" id="modal-agregar-bodega">
+        <div class="modal-caja">
+            <h2>Agregar Bodega</h2>
+            <form method="POST" action="{% url 'agregar_bodega' %}">
+                {% csrf_token %}
+                <label>Nombre</label>
+                <input type="text" name="nombre" required>
+                <label>Ubicación</label>
+                <input type="text" name="ubicacion">
+                <label>Encargado</label>
+                <input type="text" name="encargado">
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="document.getElementById('modal-agregar-bodega').classList.remove('abierto')">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Crear bodega</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR BODEGA -->
+    <div class="modal-overlay" id="modal-editar-bodega">
+        <div class="modal-caja">
+            <h2>Editar Bodega</h2>
+            <form method="POST" id="form-editar-bodega" action="">
+                {% csrf_token %}
+                <label>Nombre</label>
+                <input type="text" name="nombre" id="ebodega-nombre" required>
+                <label>Ubicación</label>
+                <input type="text" name="ubicacion" id="ebodega-ubicacion">
+                <label>Encargado</label>
+                <input type="text" name="encargado" id="ebodega-encargado">
+                <label>Estado</label>
+                <select name="activa" id="ebodega-estado">
+                    <option value="Activa">Activa</option>
+                    <option value="Inactiva">Inactiva</option>
+                </select>
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="document.getElementById('modal-editar-bodega').classList.remove('abierto')">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function abrirModalEditarBodega(id, nombre, ubicacion, encargado, estado) {
+            document.getElementById('ebodega-nombre').value = nombre;
+            document.getElementById('ebodega-ubicacion').value = ubicacion;
+            document.getElementById('ebodega-encargado').value = encargado;
+            document.getElementById('ebodega-estado').value = estado;
+            document.getElementById('form-editar-bodega').action = '/bodegas/editar/' + id + '/';
+            document.getElementById('modal-editar-bodega').classList.add('abierto');
+        }
+    </script>
+
+    {% if es_dueno %}
+<div class="modal-overlay" id="modal-reiniciar-bodega">
+    <div class="modal-caja">
+        <h2><i class="fa-solid fa-triangle-exclamation" style="color:#FF8C42;"></i> Reiniciar inventario</h2>
+        <p id="reiniciar-bodega-texto" style="margin-bottom:16px;"></p>
+        <form method="POST" id="form-reiniciar-bodega" action="">
+            {% csrf_token %}
+            <div class="campo">
+                <label>Ingresa tu contraseña para confirmar</label>
+                <input type="password" name="contrasena_confirmacion" id="input-contrasena-reiniciar"
+                    required autocomplete="current-password">
+            </div>
+            <div class="modal-botones">
+                <button type="button" class="btn-cancelar" onclick="cerrarModalReiniciarBodega()">Cancelar</button>
+                <button type="submit" class="btn-registrar" style="background:#FF8C42;">Reiniciar inventario</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function abrirModalReiniciarBodega(bodegaId, nombreBodega) {
+        document.getElementById('reiniciar-bodega-texto').textContent =
+            'Esto eliminará permanentemente los productos, ventas, clientes y movimientos de "' + nombreBodega + '". Esta acción no se puede deshacer.';
+        document.getElementById('form-reiniciar-bodega').action = '/bodegas/reiniciar/' + bodegaId + '/';
+        document.getElementById('input-contrasena-reiniciar').value = '';
+        document.getElementById('modal-reiniciar-bodega').classList.add('abierto');
+    }
+    function cerrarModalReiniciarBodega() {
+        document.getElementById('modal-reiniciar-bodega').classList.remove('abierto');
+    }
+</script>
+{% endif %}
+
+{% endblock %}

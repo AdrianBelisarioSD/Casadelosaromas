@@ -1,0 +1,230 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+html {
+    font-size: 100%;
+    height: 100%;
+}
+
+body {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    min-height: 100vh;
+    font-size: 16px;
+}
+
+.contenedor {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* COLUMNA IZQUIERDA */
+
+.columna_izquierda {
+    flex: 1 1 50%;
+    background-color: #ffffff;
+    padding: 4rem 3rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.columna_izquierda img {
+    width: 220px;
+    height: auto;
+    margin-bottom: 0.5rem;
+}
+
+.base {
+    font-size: 1.75rem;
+    letter-spacing: 0.03em;
+    margin-bottom: 1.75rem;
+    color: #1a1a1a;
+}
+
+.sub {
+    width: 100%;
+    max-width: 380px;
+    text-align: left;
+    font-size: 1rem;
+    color: #6b6b6b;
+    margin-bottom: 1.5rem;
+}
+
+form {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+}
+
+.text {
+    width: 100%;
+    text-align: left;
+    margin-bottom: 0.4rem;
+}
+
+.text p {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2b2b2b;
+}
+
+.input-icon {
+    position: relative;
+    width: 100%;
+    margin-bottom: 1.25rem;
+}
+
+.input-icon i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9a9a9a;
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+.input-email, .input-password {
+    width: 100%;
+    padding: 0.7rem 1rem 0.7rem 2.6rem;
+    border: 1px solid #dcdcdc;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    background-color: #fafafa;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.input-email:hover, .input-password:hover {
+    border-color: #c2c2c2;
+}
+
+.input-email:focus, .input-password:focus {
+    outline: none;
+    border-color: #FF262A;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(255, 38, 42, 0.12);
+}
+
+.input-email::placeholder, .input-password::placeholder {
+    font-size: 0.9rem;
+    color: #a3a3a3;
+}
+
+.vinculo {
+    text-decoration: none;
+    color: #FF262A;
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    align-self: center;
+    text-align: center;
+    transition: opacity 0.2s ease;
+}
+
+.vinculo:hover {
+    opacity: 0.75;
+    text-decoration: underline;
+}
+
+.button {
+    width: 100%;
+    background-color: #FF262A;
+    color: white;
+    padding: 0.85rem 2rem;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin-bottom: 2rem;
+    transition: background-color 0.2s ease, transform 0.05s ease;
+}
+
+.button:hover {
+    background-color: #e51e22;
+}
+
+.button:active {
+    transform: scale(0.98);
+}
+
+.contacto {
+    font-size: 0.9rem;
+    color: #4a4a4a;
+}
+
+/* COLUMNA DERECHA */
+
+.columna_derecha {
+    flex: 1 1 50%;
+    background-color: #1f6ecf;
+    color: #ffffff;
+    padding: 4rem 4rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.encabezado h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 1rem;
+}
+
+.subencabezado p {
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.5;
+    margin-bottom: 2.5rem;
+    max-width: 460px;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    width: 100%;
+    max-width: 460px;
+}
+
+.item img {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.item p {
+    color: #ffffff;
+    font-size: 1.05rem;
+    margin: 0;
+}
+
+/* RESPONSIVE: apila columnas en pantallas pequeñas */
+@media (max-width: 800px) {
+    .contenedor {
+        flex-direction: column;
+    }
+    .columna_izquierda,
+    .columna_derecha {
+        flex: 1 1 100%;
+        min-height: auto;
+        padding: 3rem 1.5rem;
+    }
+}

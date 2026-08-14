@@ -1,0 +1,38 @@
+/*  limpiar apartado de clientes desde 0  */ 
+
+py manage.py Shell
+
+from gesym.models import Cliente, Venta
+Venta.objects.all().delete()
+Cliente.objects.all().delete()
+
+exit()
+
+/*   Dueño  */
+abelisariopacheco@gmail.com
+2007
+
+/*   Administrador  */
+adrian@empresa.com
+123456
+
+/*   empleado  */
+camilo@empresa.com
+1234
+
+
+/* contraseña de reinicio */
+2007
+
+/* subir a repositorio */
+
+git rm -r --cached "Proyecto MEKATARIO/mantenimiento/gesym/__pycache__"
+git rm -r --cached "Proyecto MEKATARIO/mantenimiento/mantenimiento/__pycache__"
+git rm -r --cached "Proyecto MEKATARIO/mantenimiento/gesym/migrations/__pycache__"
+
+git add .
+git commit -m " cuarta actualización de proyecto "
+git push
+
+
+edeafd
