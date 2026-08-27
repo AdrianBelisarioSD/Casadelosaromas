@@ -1,0 +1,25 @@
+{% extends 'gesym/base.html' %}
+
+{% block titulo %}Seleccionar Bodega{% endblock %}
+
+{% block contenido %}
+    <h2 class="panel-titulo">Selecciona una bodega para continuar</h2>
+
+    <div class="cards-resumen">
+        {% for bodega in bodegas %}
+        <form method="POST" style="flex: 1; min-width: 220px;">
+            {% csrf_token %}
+            <input type="hidden" name="bodega_id" value="{{ bodega.id }}">
+            <button type="submit" class="card card-azul" style="width: 100%; cursor: pointer; border: 1px solid #1451A9; text-align: left;">
+                <div class="card-icono"><i class="fa-solid fa-warehouse"></i></div>
+                <div>
+                    <p>{{ bodega.ubicacion|default:"Sin ubicación" }}</p>
+                    <h2>{{ bodega.nombre }}</h2>
+                </div>
+            </button>
+        </form>
+        {% empty %}
+        <p>No hay bodegas registradas. Ve a <a href="{% url 'bodegas' %}">Bodegas</a> para crear la primera.</p>
+        {% endfor %}
+    </div>
+{% endblock %}

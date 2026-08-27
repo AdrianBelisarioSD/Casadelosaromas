@@ -1,0 +1,152 @@
+{% extends 'gesym/base.html' %}
+{% load gesym_extras %}
+
+{% block titulo %}Clientes{% endblock %}
+
+{% block contenido %}
+    <h2 class="panel-titulo">Clientes</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="mensaje-alerta mensaje-{{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+
+    <div class="cards-resumen">
+        <div class="card card-naranja">
+            <div class="card-icono"><i class="fa-solid fa-users"></i></div>
+            <div>
+                <p>Clientes registrados</p>
+                <h2>{{ total_clientes }}</h2>
+            </div>
+        </div>
+        <div class="card card-azul">
+            <div class="card-icono"><i class="fa-solid fa-bag-shopping"></i></div>
+            <div>
+                <p>Compras realizadas</p>
+                <h2>{{ total_compras }}</h2>
+            </div>
+        </div>
+        <div class="card card-verde">
+            <div class="card-icono"><i class="fa-solid fa-dollar-sign"></i></div>
+            <div>
+                <p>Total comprado</p>
+                <h2>${{ total_gastado|moneda }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="acciones-inventario">
+        <button class="btn-primario" onclick="document.getElementById('modal-agregar-cliente').classList.add('abierto')">
+            Agregar cliente
+        </button>
+    </div>
+
+    <table class="tabla-inventario">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Correo</th>
+                <th>Teléfono</th>
+                <th>Dirección</th>
+                <th>Compras</th>
+                <th class="th-acciones">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cliente in clientes %}
+            <tr>
+                <td>{{ cliente.nombre_completo }}</td>
+                <td>{{ cliente.correo|default:"—" }}</td>
+                <td>{{ cliente.telefono|default:"—" }}</td>
+                <td><i class="fa-solid fa-location-dot"></i> {{ cliente.direccion|default:"—" }}</td>
+                <td>{{ cliente.ventas.count }}</td>
+                <td class="celda-acciones">
+                    <div class="acciones-grupo">
+                        <i class="fa-solid fa-pen editar-icono"
+                            onclick="abrirModalEditarCliente('{{ cliente.id }}', '{{ cliente.nombre_completo|escapejs }}', '{{ cliente.correo|escapejs }}', '{{ cliente.telefono|escapejs }}', '{{ cliente.direccion|escapejs }}')"></i>
+                        <form method="POST" action="{% url 'eliminar_cliente' cliente.id %}" class="form-inline" onsubmit="return confirm('¿Eliminar este cliente?');">
+                            {% csrf_token %}
+                            <button type="submit" class="icono-boton"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">No hay clientes registrados todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="paginacion">
+        {% if clientes.has_previous %}
+            <a href="?page={{ clientes.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% for numero in clientes.paginator.page_range %}
+            {% if numero == clientes.number %}
+                <a href="?page={{ numero }}" class="active">{{ numero }}</a>
+            {% else %}
+                <a href="?page={{ numero }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">{{ numero }}</a>
+            {% endif %}
+        {% endfor %}
+        {% if clientes.has_next %}
+            <a href="?page={{ clientes.next_page_number }}">Siguiente</a>
+        {% endif %}
+    </div>
+
+    <!-- MODAL: AGREGAR CLIENTE -->
+    <div class="modal-overlay" id="modal-agregar-cliente">
+        <div class="modal-caja">
+            <h2>Agregar Cliente</h2>
+            <form method="POST" action="{% url 'agregar_cliente' %}">
+                {% csrf_token %}
+                <label>Nombre completo</label>
+                <input type="text" name="nombre_completo" required>
+                <label>Correo electrónico</label>
+                <input type="email" name="correo">
+                <label>Teléfono</label>
+                <input type="text" name="telefono" inputmode="numeric" pattern="[0-9]*" maxlength="15" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <label>Dirección</label>
+                <input type="text" name="direccion">
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="document.getElementById('modal-agregar-cliente').classList.remove('abierto')">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Registrar cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR CLIENTE -->
+    <div class="modal-overlay" id="modal-editar-cliente">
+        <div class="modal-caja">
+            <h2>Editar Cliente</h2>
+            <form method="POST" id="form-editar-cliente" action="">
+                {% csrf_token %}
+                <label>Nombre completo</label>
+                <input type="text" name="nombre_completo" id="ecliente-nombre" required>
+                <label>Correo electrónico</label>
+                <input type="email" name="correo" id="ecliente-correo">
+                <label>Teléfono</label>
+                <input type="text" name="telefono" id="ecliente-telefono" inputmode="numeric" pattern="[0-9]*" maxlength="15" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <label>Dirección</label>
+                <input type="text" name="direccion" id="ecliente-direccion">
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="document.getElementById('modal-editar-cliente').classList.remove('abierto')">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function abrirModalEditarCliente(id, nombre, correo, telefono, direccion) {
+            document.getElementById('ecliente-nombre').value = nombre;
+            document.getElementById('ecliente-correo').value = correo;
+            document.getElementById('ecliente-telefono').value = telefono;
+            document.getElementById('ecliente-direccion').value = direccion;
+            document.getElementById('form-editar-cliente').action = '/clientes/editar/' + id + '/';
+            document.getElementById('modal-editar-cliente').classList.add('abierto');
+        }
+    </script>
+
+{% endblock %}

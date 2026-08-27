@@ -1,0 +1,119 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" translate="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'gesym/css/base.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="icon" type="image/png" sizes="180x180" href="{% static 'gesym/img/mekatario.png' %}">
+    <title>Mekatario - {% block titulo %}Inicio{% endblock %}</title>
+    <meta name="google" content="notranslate">
+
+</head>
+<body>
+
+    <div class="app-wrapper">
+
+            <div class="header">
+                <div class="header-centro">
+                <form class="search" method="GET" action="{{ request.path }}">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" name="q" placeholder="Buscar..." value="{{ request.GET.q|default:'' }}">
+                </form>
+                    <a href="{% url 'seleccionar_bodega' %}" class="selector-bodega">
+                        <i class="fa-solid fa-warehouse"></i>
+                        <span>{{ bodega_actual.nombre|default:"Seleccionar bodega" }}</span>
+                    </a>
+                </div>
+
+                <div class="header-usuario">
+                    <button type="button" class="btn-header-usuario" onclick="toggleMenuUsuario()">
+                        <i class="fa-solid fa-circle-user"></i>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+
+                    <div class="tarjeta-usuario" id="tarjeta-usuario">
+                        <div class="tarjeta-usuario-header">
+                            <h3>Usuario</h3>
+                            <button type="button" class="btn-cerrar-x" onclick="toggleMenuUsuario()">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="tarjeta-usuario-datos">
+                            <p class="tarjeta-usuario-cargo">{{ empleado_actual.cargo_empleado }}</p>
+                            <p class="tarjeta-usuario-nombre">{{ empleado_actual.nombre_empleado }} {{ empleado_actual.apellido_empleado }}</p>
+                            <p class="tarjeta-usuario-doc">{{ empleado_actual.documento_de_identidad }}</p>
+                        </div>
+                        <form method="POST" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="tarjeta-usuario-cerrar">Cerrar sesión</button>
+                        </form>
+                    </div>
+                </div>
+            </div>  
+
+        <label>
+            <input class="menu-checkbox" type="checkbox">
+            <div class="toggle">
+                <span class="top_line common"></span>
+                <span class="middle_line common"></span>
+                <span class="bottom_line common"></span>
+            </div>
+
+            <div class="Menu">
+
+                <img src="{% static 'gesym/img/mekatario-fondo-azul.png.png' %}" alt="Logo de Mekatario" width="180">
+
+                <ul>
+                    <li><a href="{% url 'inicio' %}" class="{% if request.resolver_match.url_name == 'inicio' %}active{% endif %}"><i class="fa-solid fa-bars-progress"></i> Panel de Información</a></li>
+                    <li><a href="{% url 'inventario' %}" class="{% if request.resolver_match.url_name == 'inventario' %}active{% endif %}"><i class="fa-solid fa-cart-flatbed"></i> Inventario</a></li>
+                    <li><a href="{% url 'compras' %}" class="{% if request.resolver_match.url_name == 'compras' %}active{% endif %}"><i class="fa-solid fa-basket-shopping"></i> Compras</a></li>
+                    <li><a href="{% url 'informes' %}" class="{% if request.resolver_match.url_name == 'informes' %}active{% endif %}"><i class="fa-solid fa-file-lines"></i> Informes</a></li>
+                    <li><a href="{% url 'clientes' %}" class="{% if request.resolver_match.url_name == 'clientes' %}active{% endif %}"><i class="fa-solid fa-address-book"></i> Clientes</a></li>
+                    <li><a href="{% url 'bodegas' %}" class="{% if request.resolver_match.url_name == 'bodegas' %}active{% endif %}"><i class="fa-solid fa-warehouse"></i> Bodegas</a></li>
+                    <li><a href="{% url 'soporte' %}" class="{% if request.resolver_match.url_name == 'soporte' %}active{% endif %}"><i class="fa-solid fa-triangle-exclamation"></i> Reportar un problema</a></li>
+                    {% if es_administrador %}
+                    <li><a href="{% url 'solicitudes_pendientes' %}" class="{% if request.resolver_match.url_name == 'solicitudes_pendientes' %}active{% endif %}"><i class="fa-solid fa-user-clock"></i> Solicitudes</a></li>
+                    <li><a href="{% url 'soporte_pendientes' %}" class="{% if request.resolver_match.url_name == 'soporte_pendientes' %}active{% endif %}"><i class="fa-solid fa-headset"></i> Solicitudes de Soporte</a></li>
+                    <li><a href="{% url 'usuarios' %}" class="{% if request.resolver_match.url_name == 'usuarios' %}active{% endif %}"><i class="fa-solid fa-users"></i> Usuarios</a></li>
+                    {% endif %}
+                    <li><a href="{% url 'acerca' %}" class="{% if request.resolver_match.url_name == 'acerca' %}active{% endif %}"><i class="fa-solid fa-circle-info"></i> Acerca de</a></li>
+
+
+                
+                
+
+            </div>
+        </label>
+        
+
+        <main class="contenido">
+        {% block contenido %}
+        {% endblock %}
+        </main>
+
+    </div>
+
+    <script>
+        function toggleMenuUsuario() {
+            document.getElementById('tarjeta-usuario').classList.toggle('abierta');
+            document.getElementById('btn-header-usuario').classList.toggle('activo');
+        }
+
+        document.addEventListener('click', function (e) {
+            const contenedor = document.querySelector('.header-usuario');
+            const tarjeta = document.getElementById('tarjeta-usuario');
+            const boton = document.getElementById('btn-header-usuario');
+            if (contenedor && tarjeta && !contenedor.contains(e.target)) {
+                tarjeta.classList.remove('abierta');
+                boton.classList.remove('activo');
+            }
+        });
+    </script>
+
+
+
+
+</body>
+</html>

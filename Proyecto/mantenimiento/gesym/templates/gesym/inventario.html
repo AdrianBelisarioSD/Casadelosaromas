@@ -1,0 +1,583 @@
+{% extends 'gesym/base.html' %}
+{% load gesym_extras %}
+
+{% block titulo %}Inventario{% endblock %}
+
+{% block contenido %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <p class="mensaje-alerta mensaje-error">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
+
+    <div class="cards-resumen">
+        <div class="card card-verde">
+            <div class="card-icono"><i class="fa-solid fa-box"></i></div>
+            <div>
+                <p>Total de Productos</p>
+                <h2>{{ total_productos }}</h2>
+            </div>
+        </div>
+        <div class="card card-amarilla">
+            <div class="card-icono"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div>
+                <p>Unidades en Stock</p>
+                <h2>{{ unidades_en_stock }}</h2>
+            </div>
+        </div>
+        <div class="card card-azul">
+            <div class="card-icono"><i class="fa-solid fa-dollar-sign"></i></div>
+            <div>
+                <p>Valor total de Inventario</p>
+                <h2>${{ valor_total_inventario|moneda }}</h2>
+            </div>
+        </div>
+        <div class="card card-roja">
+            <div class="card-icono"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div>
+                <p>Stock Bajo</p>
+                <h2>{{ stock_bajo }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="acciones-inventario acciones-inventario--con-orden">
+        <form method="GET" action="{{ request.path }}" class="form-orden">
+            <input type="hidden" name="q" value="{{ request.GET.q|default:'' }}">
+            <label for="orden">Ordenar por:</label>
+            <select name="orden" id="orden" onchange="this.form.submit()">
+                <option value="nombre_asc" {% if orden_actual == 'nombre_asc' %}selected{% endif %}>Nombre (A-Z)</option>
+                <option value="nombre_desc" {% if orden_actual == 'nombre_desc' %}selected{% endif %}>Nombre (Z-A)</option>
+                <option value="codigo_asc" {% if orden_actual == 'codigo_asc' %}selected{% endif %}>Código (ascendente)</option>
+                <option value="codigo_desc" {% if orden_actual == 'codigo_desc' %}selected{% endif %}>Código (descendente)</option>
+            </select>
+        </form>
+        <button class="btn-primario" onclick="abrirModalAgregar()">Agregar productos</button>
+    </div>
+
+    <table class="tabla-inventario">
+        <thead>
+            <tr>
+                <th class="th-producto">Producto</th>
+                <th>Codigo</th>
+                <th>Tipo de Stock</th>
+                <th>Categoria</th>
+                <th class="th-cantidad">Cantidad</th>
+                <th>Tipo</th>
+                <th>Precio UND</th>
+                <th>Valor Total</th>
+                <th class="th-acciones">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for producto in productos %}
+            <tr>
+                <td class="td-producto">{{ producto.nombre }}</td>
+                <td>{{ producto.codigo }}</td>
+                <td>
+                    {% if producto.cantidad < 10 %}
+                        <span class="estado-badge estado-stock-bajo">Stock Bajo</span>
+                    {% elif producto.cantidad < 25 %}
+                        <span class="estado-badge estado-stock-medio">Stock Medio</span>
+                    {% elif producto.cantidad < 50 %}
+                        <span class="estado-badge estado-stock-normal">Stock Normal</span>
+                    {% else %}
+                        <span class="estado-badge estado-stock-alto">Stock Alto</span>
+                    {% endif %}
+                </td>
+                <td>{{ producto.categoria }}</td>
+                <td class="td-cantidad">
+                    {% if producto.tipo_ingreso == 'bandeja' and producto.numero_bandejas and producto.unidades_por_bandeja %}
+                        {{ producto.cantidad }} bandeja{{ producto.cantidad|pluralize }} de {{ producto.unidades_por_bandeja }} unidades ({{ producto.cantidad|multiplicar:producto.unidades_por_bandeja }} unidades individuales en total)
+                    {% else %}
+                        {{ producto.cantidad }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if producto.tipo_ingreso == 'bandeja' %}
+                        <span class="estado-badge estado-bandeja">Bandeja</span>
+                    {% else %}
+                        <span class="estado-badge estado-unidad">Unidad</span>
+                    {% endif %}
+                </td>
+                <td>${{ producto.precio|moneda }}</td>
+                <td>${{ producto.valor_total|moneda }}</td>
+
+                <td class="celda-acciones">
+                    <div class="acciones-grupo">
+                        <i class="fa-solid fa-pen editar-icono"
+                            onclick="abrirModalEditar(
+                                '{{ producto.id }}',
+                                '{{ producto.nombre|escapejs }}',
+                                '{{ producto.codigo|escapejs }}',
+                                '{{ producto.marca|escapejs }}',
+                                '{{ producto.categoria|escapejs }}',
+                                '{{ producto.cantidad }}',
+                                '{{ producto.precio|stringformat:"0.2f" }}',
+                                '{{ producto.descripcion|escapejs }}',
+                                '{{ producto.tipo_ingreso }}',
+                                '{{ producto.unidades_por_caja|default_if_none:"" }}',
+                                '{{ producto.precio_caja|stringformat:"0.2f" }}'
+                            )"></i>
+                        <form method="POST" action="{% url 'eliminar_producto' producto.id %}" class="form-inline" onsubmit="return confirm('¿Eliminar este producto?');">
+                            {% csrf_token %}
+                            <button type="submit" class="icono-boton"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                        <i class="fa-solid fa-circle-info detalle-icono"
+                            onclick="abrirModalDetalleProducto(
+                                '{{ producto.nombre|escapejs }}',
+                                '{{ producto.codigo|escapejs }}',
+                                '{{ producto.marca|escapejs }}',
+                                '{{ producto.categoria|escapejs }}',
+                                '{{ producto.tipo_ingreso }}',
+                                '{{ producto.cantidad }}',
+                                '{{ producto.unidades_por_bandeja|default_if_none:"" }}',
+                                '{{ producto.numero_bandejas|default_if_none:"" }}',
+                                '{{ producto.precio|stringformat:"0.2f" }}',
+                                '{{ producto.valor_total|stringformat:"0.2f" }}',
+                                '{{ producto.stock_minimo }}',
+                                '{{ producto.descripcion|escapejs }}',
+                                '{{ producto.fecha_creacion|date:"d \\d\\e F \\d\\e Y" }}'
+                            )"></i>
+                    </div>
+                </td>
+
+
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">No hay productos registrados todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- MODAL: AGREGAR -->
+    <div class="modal-overlay" id="modal-agregar">
+        <div class="modal-caja">
+            <h2>Agregar Productos</h2>
+            <p class="mensaje-alerta mensaje-error" id="error-agregar-producto" style="display:none;"></p>
+            <form method="POST" action="{% url 'agregar_producto' %}" id="form-agregar-producto">
+                {% csrf_token %}
+
+                <label>Tipo de ingreso</label>
+                <select id="tipo-ingreso" name="tipo_ingreso" onchange="alternarTipoIngreso()">
+                    <option value="unidad" selected>Agregar producto por unidad</option>
+                    <option value="bandeja">Agregar producto por paquete</option>
+                </select>
+
+                <label>Nombre de el producto</label>
+                <input type="text" name="nombre" required>
+
+                <div class="modal-fila">
+                    <div>
+                        <label>Codigo</label>
+                        <input type="text" name="codigo" required>
+                    </div>
+                    <div>
+                        <label>Marca</label>
+                        <input type="text" name="marca">
+                    </div>
+                    <div>
+                        <label>Categoria</label>
+                        <input type="text" name="categoria">
+                    </div>
+                </div>
+
+                <div class="modal-fila">
+                    <div>
+                        <label>Cantidad</label>
+                        <input type="number" name="cantidad" id="input-cantidad" min="0" value="0" required>
+                    </div>
+                    <div>
+                        <label id="label-precio">Precio</label>
+                        <input type="number" id="input-precio-visible" min="0" step="0.01" required oninput="calcularPrecioReal()">
+                        <input type="hidden" name="precio" id="input-precio-real">
+                    </div>
+                </div>
+
+                <!-- Opciones que solo aparecen si se elige "Por bandeja" -->
+                <div id="opciones-bandeja" style="display:none;">
+                    <div class="modal-fila">
+                        <div>
+                            <label>Unidades por bandeja</label>
+                            <select id="select-unidades-bandeja" onchange="manejarSelectBandeja()">
+                                <option value="6">6 unidades</option>
+                                <option value="12">12 unidades</option>
+                                <option value="24">24 unidades</option>
+                                <option value="30">30 unidades</option>
+                                <option value="36">36 unidades</option>
+                                <option value="personalizado">Otra cantidad...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Número de bandejas</label>
+                            <input type="number" name="numero_bandejas" id="input-num-bandejas" min="1" value="1" oninput="calcularTotalBandeja()">
+                        </div>
+                    </div>
+                    <div id="campo-unidades-personalizadas" style="display:none;">
+                        <label>Unidades por bandeja (personalizado)</label>
+                        <input type="number" id="input-unidades-personalizadas" min="1" oninput="calcularTotalBandeja()">
+                    </div>
+                    <input type="hidden" name="unidades_por_bandeja" id="input-unidades-por-bandeja-real">
+                </div>
+
+                <label>Venta por caja (opcional)</label>
+                <div class="modal-fila">
+                    <div>
+                        <label>Unidades por caja</label>
+                        <input type="number" name="unidades_por_caja" id="input-unidades-por-caja" min="1" placeholder="Ej: 25">
+                    </div>
+                    <div>
+                        <label>Precio de la caja</label>
+                        <input type="number" name="precio_caja" id="input-precio-caja" min="0" step="0.01" placeholder="Ej: 19000">
+                    </div>
+                </div>
+                <p class="texto-ayuda-caja">Completa esto solo si el producto también se vende por caja con un precio especial. Si lo dejas vacío, solo se venderá por unidad.</p>
+
+                <label>Descripción (Opcional)</label>
+                <textarea name="descripcion" placeholder="Breve Descripción de el producto ...."></textarea>
+
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="cerrarModalAgregar()">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Registrar productos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR -->
+    <div class="modal-overlay" id="modal-editar">
+        <div class="modal-caja">
+            <h2>Editar Productos</h2>
+            <form method="POST" id="form-editar" action="">
+                {% csrf_token %}
+                <label>Nombre de el producto</label>
+                <input type="text" name="nombre" id="edit-nombre" required>
+
+                <label>Tipo de ingreso</label>
+                <select name="tipo_ingreso" id="edit-tipo-ingreso">
+                    <option value="unidad">Unidad</option>
+                    <option value="bandeja">Bandeja</option>
+                </select>
+
+                <div class="modal-fila">
+                    <div>
+                        <label>Codigo</label>
+                        <input type="text" name="codigo" id="edit-codigo" required>
+                    </div>
+                    <div>
+                        <label>Marca</label>
+                        <input type="text" name="marca" id="edit-marca">
+                    </div>
+                    <div>
+                        <label>Categoria</label>
+                        <input type="text" name="categoria" id="edit-categoria">
+                    </div>
+                </div>
+
+                <div class="modal-fila">
+                    <div>
+                        <label>Cantidad</label>
+                        <input type="number" name="cantidad" id="edit-cantidad" min="0" required>
+                    </div>
+                    <div>
+                        <label>Precio</label>
+                        <input type="text" id="edit-precio-visual" inputmode="decimal" required>
+                        <input type="hidden" name="precio" id="edit-precio">
+                    </div>
+                </div>
+
+                <label>Venta por caja (opcional)</label>
+                <div class="modal-fila">
+                    <div>
+                        <label>Unidades por caja</label>
+                        <input type="number" name="unidades_por_caja" id="edit-unidades-por-caja" min="1" placeholder="Ej: 25">
+                    </div>
+                    <div>
+                        <label>Precio de la caja</label>
+                        <input type="number" name="precio_caja" id="edit-precio-caja" min="0" step="0.01" placeholder="Ej: 19000">
+                    </div>
+                </div>
+                <p class="texto-ayuda-caja">Completa esto solo si el producto también se vende por caja con un precio especial.</p>
+
+                <label>Descripción (Opcional)</label>
+                <textarea name="descripcion" id="edit-descripcion"></textarea>
+
+                <div class="modal-botones">
+                    <button type="button" class="btn-cancelar" onclick="cerrarModalEditar()">Cancelar</button>
+                    <button type="submit" class="btn-registrar">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- MODAL: DETALLE -->
+    <div class="modal-overlay" id="modal-detalle-producto">
+        <div class="modal-caja modal-caja-grande">
+            <div class="detalle-header">
+                <h2>Detalles del Producto</h2>
+                <button type="button" class="btn-cancelar" onclick="cerrarModalDetalleProducto()">Cerrar</button>
+            </div>
+
+            <div class="venta-badges">
+                <div class="badge badge-azul"><i class="fa-solid fa-box"></i> <span id="detalle-producto-tipo"></span></div>
+                <div class="badge badge-verde"><i class="fa-solid fa-calendar"></i> <span id="detalle-producto-fecha"></span></div>
+            </div>
+
+            <h3 class="subtitulo-modal">Información general</h3>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Nombre</label>
+                    <input type="text" id="detalle-producto-nombre" disabled>
+                </div>
+                <div class="campo">
+                    <label>Código</label>
+                    <input type="text" id="detalle-producto-codigo" disabled>
+                </div>
+            </div>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Marca</label>
+                    <input type="text" id="detalle-producto-marca" disabled>
+                </div>
+                <div class="campo">
+                    <label>Categoría</label>
+                    <input type="text" id="detalle-producto-categoria" disabled>
+                </div>
+            </div>
+
+            <h3 class="subtitulo-modal">Existencias y precio</h3>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Cantidad en stock</label>
+                    <input type="text" id="detalle-producto-cantidad" disabled>
+                </div>
+                <div class="campo">
+                    <label>Stock mínimo</label>
+                    <input type="text" id="detalle-producto-stock-minimo" disabled>
+                </div>
+            </div>
+            <div class="modal-fila">
+                <div class="campo">
+                    <label>Precio unitario</label>
+                    <input type="text" id="detalle-producto-precio" disabled>
+                </div>
+                <div class="campo">
+                    <label>Valor total</label>
+                    <input type="text" id="detalle-producto-valor-total" disabled>
+                </div>
+            </div>
+
+            <div id="detalle-producto-bandeja-info" style="display:none;">
+                <h3 class="subtitulo-modal">Detalle de bandeja</h3>
+                <div class="modal-fila">
+                    <div class="campo">
+                        <label>Unidades por bandeja</label>
+                        <input type="text" id="detalle-producto-unidades-bandeja" disabled>
+                    </div>
+                    <div class="campo">
+                        <label>Número de bandejas</label>
+                        <input type="text" id="detalle-producto-num-bandejas" disabled>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="subtitulo-modal">Descripción</h3>
+            <p id="detalle-producto-descripcion" class="detalle-texto">Sin descripción.</p>
+        </div>
+    </div>
+
+
+
+        <div class="paginacion">
+            {% if productos.has_previous %}
+                <a href="?page={{ productos.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if orden_actual %}&orden={{ orden_actual }}{% endif %}">Anterior</a>
+            {% endif %}
+
+            {% for numero in productos.paginator.page_range %}
+                {% if numero == productos.number %}
+                    <a href="?page={{ numero }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if orden_actual %}&orden={{ orden_actual }}{% endif %}" class="active">{{ numero }}</a>
+                {% else %}
+                    <a href="?page={{ numero }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if orden_actual %}&orden={{ orden_actual }}{% endif %}">{{ numero }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if productos.has_next %}
+                <a href="?page={{ productos.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if orden_actual %}&orden={{ orden_actual }}{% endif %}">Siguiente</a>
+            {% endif %}
+        </div>
+
+
+    <script>
+        function abrirModalAgregar() {
+            document.getElementById('tipo-ingreso').value = 'unidad';
+            document.getElementById('opciones-bandeja').style.display = 'none';
+            document.getElementById('campo-unidades-personalizadas').style.display = 'none';
+            document.getElementById('input-cantidad').readOnly = false;
+            document.getElementById('input-cantidad').value = 0;
+            document.getElementById('input-precio-visible').value = '';
+            document.getElementById('label-precio').textContent = 'Precio';
+            document.getElementById('modal-agregar').classList.add('abierto');
+        }
+        function cerrarModalAgregar() {
+            document.getElementById('modal-agregar').classList.remove('abierto');
+        }
+
+        function alternarTipoIngreso() {
+            const tipo = document.getElementById('tipo-ingreso').value;
+            const panelBandeja = document.getElementById('opciones-bandeja');
+            const inputCantidad = document.getElementById('input-cantidad');
+            const labelPrecio = document.getElementById('label-precio');
+
+            if (tipo === 'bandeja') {
+                panelBandeja.style.display = 'block';
+                inputCantidad.readOnly = true;
+                labelPrecio.textContent = 'Precio por bandeja';
+                calcularTotalBandeja();
+            } else {
+                panelBandeja.style.display = 'none';
+                inputCantidad.readOnly = false;
+                inputCantidad.value = 0;
+                labelPrecio.textContent = 'Precio por unidad';
+            }
+            calcularPrecioReal();
+        }
+
+        function manejarSelectBandeja() {
+            const valor = document.getElementById('select-unidades-bandeja').value;
+            document.getElementById('campo-unidades-personalizadas').style.display = valor === 'personalizado' ? 'block' : 'none';
+            calcularTotalBandeja();
+            calcularPrecioReal();
+        }
+
+        function calcularTotalBandeja() {
+            const select = document.getElementById('select-unidades-bandeja');
+            const numBandejas = parseInt(document.getElementById('input-num-bandejas').value) || 0;
+            let unidadesPorBandeja;
+
+            if (select.value === 'personalizado') {
+                unidadesPorBandeja = parseInt(document.getElementById('input-unidades-personalizadas').value) || 0;
+            } else {
+                unidadesPorBandeja = parseInt(select.value) || 0;
+            }
+
+            // La "cantidad" que se guarda es el número de bandejas (cada bandeja = 1 unidad de stock),
+            // no el total de unidades individuales. "unidades_por_bandeja" solo queda como dato informativo.
+            document.getElementById('input-cantidad').value = numBandejas;
+            document.getElementById('input-unidades-por-bandeja-real').value = unidadesPorBandeja;
+            calcularPrecioReal();
+        }
+
+        function calcularPrecioReal() {
+            const tipo = document.getElementById('tipo-ingreso').value;
+            const precioVisible = parseFloat(document.getElementById('input-precio-visible').value) || 0;
+            const inputPrecioReal = document.getElementById('input-precio-real');
+
+            // El precio ingresado ya es el precio de la unidad que se está registrando
+            // (una bandeja completa o una unidad suelta), así que no se divide en ningún caso.
+            inputPrecioReal.value = precioVisible;
+        }
+
+        function formatearInputMoneda(valor) {
+            return Number(valor).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function parsearInputMoneda(texto) {
+            const limpio = String(texto).replace(/\./g, '').replace(',', '.');
+            return parseFloat(limpio) || 0;
+        }
+
+        function abrirModalEditar(id, nombre, codigo, marca, categoria, cantidad, precio, descripcion, tipoIngreso, unidadesPorCaja, precioCaja) {
+            document.getElementById('edit-nombre').value = nombre;
+            document.getElementById('edit-codigo').value = codigo;
+            document.getElementById('edit-marca').value = marca;
+            document.getElementById('edit-categoria').value = categoria;
+            document.getElementById('edit-cantidad').value = cantidad;
+            document.getElementById('edit-precio').value = precio;
+            document.getElementById('edit-precio-visual').value = formatearInputMoneda(precio);
+            document.getElementById('edit-descripcion').value = descripcion;
+            document.getElementById('edit-tipo-ingreso').value = tipoIngreso;
+            document.getElementById('edit-unidades-por-caja').value = unidadesPorCaja || '';
+            document.getElementById('edit-precio-caja').value = precioCaja || '';
+            document.getElementById('form-editar').action = '/inventario/editar/' + id + '/';
+            document.getElementById('modal-editar').classList.add('abierto');
+        }
+
+        function cerrarModalEditar() {
+            document.getElementById('modal-editar').classList.remove('abierto');
+        }
+
+        function abrirModalDetalleProducto(nombre, codigo, marca, categoria, tipoIngreso, cantidad, unidadesPorBandeja, numeroBandejas, precio, valorTotal, stockMinimo, descripcion, fechaCreacion) {
+                document.getElementById('detalle-producto-nombre').value = nombre;
+                document.getElementById('detalle-producto-codigo').value = codigo;
+                document.getElementById('detalle-producto-marca').value = marca || '—';
+                document.getElementById('detalle-producto-categoria').value = categoria || '—';
+                document.getElementById('detalle-producto-cantidad').value = cantidad;
+                document.getElementById('detalle-producto-stock-minimo').value = stockMinimo;
+                document.getElementById('detalle-producto-precio').value = '$' + formatearInputMoneda(precio);
+                document.getElementById('detalle-producto-valor-total').value = '$' + formatearInputMoneda(valorTotal);
+                document.getElementById('detalle-producto-fecha').textContent = fechaCreacion;
+
+                const textoDescripcion = descripcion && descripcion.trim() !== '' ? descripcion : 'Sin descripción.';
+                document.getElementById('detalle-producto-descripcion').textContent = textoDescripcion;
+
+                const badgeTipo = document.getElementById('detalle-producto-tipo');
+                const panelBandeja = document.getElementById('detalle-producto-bandeja-info');
+
+                if (tipoIngreso === 'bandeja') {
+                    badgeTipo.textContent = 'Bandeja';
+                    panelBandeja.style.display = 'block';
+                    document.getElementById('detalle-producto-unidades-bandeja').value = unidadesPorBandeja || '—';
+                    document.getElementById('detalle-producto-num-bandejas').value = numeroBandejas || '—';
+                } else {
+                    badgeTipo.textContent = 'Unidad';
+                    panelBandeja.style.display = 'none';
+                }
+
+                document.getElementById('modal-detalle-producto').classList.add('abierto');
+            }
+
+            function cerrarModalDetalleProducto() {
+                document.getElementById('modal-detalle-producto').classList.remove('abierto');
+            }
+
+        document.getElementById('form-agregar-producto').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = e.target;
+            const errorEl = document.getElementById('error-agregar-producto');
+            errorEl.style.display = 'none';
+
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    window.location.reload();
+                } else {
+                    errorEl.textContent = data.error;
+                    errorEl.style.display = 'block';
+                }
+            })
+            .catch(() => {
+                errorEl.textContent = 'Ocurrió un error al agregar el producto. Intenta de nuevo.';
+                errorEl.style.display = 'block';
+            });
+        });
+
+        document.getElementById('form-editar').addEventListener('submit', function () {
+            const valorReal = parsearInputMoneda(document.getElementById('edit-precio-visual').value);
+            document.getElementById('edit-precio').value = valorReal;
+        });
+
+        document.getElementById('edit-precio-visual').addEventListener('blur', function () {
+            const valorReal = parsearInputMoneda(this.value);
+            document.getElementById('edit-precio').value = valorReal;
+            this.value = formatearInputMoneda(valorReal);
+        });
+    </script>
+
+{% endblock %}
